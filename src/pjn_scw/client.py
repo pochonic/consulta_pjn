@@ -38,6 +38,7 @@ DEFAULT_SELECTORS = {
     "order_button": "a:has-text('Ordenar'), button:has-text('Ordenar')",
     "result_table": "table[id$=':dataTable']",
 }
+DEFAULT_CONSULTAS_URL = "https://scw.pjn.gov.ar/scw/consultaListaRelacionados.seam"
 
 
 class PjnClient:
@@ -51,6 +52,7 @@ class PjnClient:
         *,
         top_n: int = 5,
         selectors: dict[str, str] | None = None,
+        consultas_url: str = DEFAULT_CONSULTAS_URL,
         timeout_ms: int = 30_000,
         headless: bool = True,
         slow_mo_ms: int = 0,
@@ -60,6 +62,7 @@ class PjnClient:
         self.password = password
         self.top_n = top_n
         self.selectors = {**DEFAULT_SELECTORS, **(selectors or {})}
+        self.consultas_url = consultas_url
         self.timeout_ms = timeout_ms
         self.headless = headless
         self.slow_mo_ms = slow_mo_ms
@@ -93,6 +96,10 @@ class PjnClient:
 
     async def _open_consultas(self, context: BrowserContext, page: Page) -> Page:
         link = page.locator(self.selectors["consultas_link"]).first
+        if await link.count() == 0:
+            LOGGER.warning("No aparece el link Consultas; abriendo la URL SCW autenticada configurada")
+            await page.goto(self.consultas_url, wait_until="domcontentloaded")
+            return page
         try:
             async with context.expect_page(timeout=self.timeout_ms) as page_info:
                 await link.click()
@@ -100,15 +107,26 @@ class PjnClient:
             await consultas.wait_for_load_state("domcontentloaded")
             return consultas
         except PlaywrightTimeoutError:
-            clicked_element = await link.evaluate(
-                "el => ({tag: el.tagName, text: el.innerText.trim(), href: el.href || null, "
-                "target: el.target || null, role: el.getAttribute('role')})"
+            matches = await link.count()
+            clicked_element = None
+            if matches:
+                clicked_element = await link.first.evaluate(
+                    "el => ({tag: el.tagName, text: el.innerText.trim(), href: el.href || null, "
+                    "target: el.target || null, role: el.getAttribute('role')})"
+                )
+            nav_items = await page.locator("nav a, header a, aside a, [role='navigation'] a").evaluate_all(
+                "elements => elements.map(e => ({text: e.innerText.trim(), "
+                "href: new URL(e.href, location.href).pathname})).filter(e => e.text).slice(0, 40)"
             )
             LOGGER.warning(
-                "Consultas no abrió una pestaña nueva; elemento clickeado=%s",
+                "No se pudo abrir Consultas; page_title=%s url=%s matches=%s target=%s nav_items=%s",
+                await page.title(),
+                urlunsplit((*urlsplit(page.url)[:3], "", "")),
+                matches,
                 json.dumps(clicked_element, ensure_ascii=False),
+                json.dumps(nav_items, ensure_ascii=False),
             )
-            await page.wait_for_load_state("domcontentloaded")
+            await page.goto(self.consultas_url, wait_until="domcontentloaded")
             return page
 
     async def _order_by_date(self, page: Page) -> None:

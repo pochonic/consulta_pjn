@@ -37,6 +37,10 @@ async def run_once() -> None:
             _required("PJN_USER"),
             _required("PJN_PASSWORD"),
             top_n=int(os.environ.get("PJN_TOP_N", "5")),
+            consultas_url=os.environ.get(
+                "PJN_CONSULTAS_URL",
+                "https://scw.pjn.gov.ar/scw/consultaListaRelacionados.seam",
+            ),
             headless=os.environ.get("PJN_HEADLESS", "true").lower() == "true",
         )
         results = await client.collect()
