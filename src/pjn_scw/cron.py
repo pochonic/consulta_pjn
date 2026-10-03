@@ -21,7 +21,8 @@ def in_schedule_window(now: datetime) -> bool:
 
 async def run_once() -> None:
     now = datetime.now(ARGENTINA_TZ)
-    if not in_schedule_window(now):
+    force_run = os.environ.get("PJN_FORCE_RUN", "false").lower() == "true"
+    if not in_schedule_window(now) and not force_run:
         LOGGER.info("Fuera de ventana PJN; no se ejecuta consulta hora=%s", now.strftime("%H:%M"))
         return
 
@@ -30,6 +31,7 @@ async def run_once() -> None:
     telegram = TelegramApi(_required("TELEGRAM_BOT_TOKEN"))
     run_id = storage.start_run("railway-cron")
     try:
+        LOGGER.info("Iniciando consulta PJN run_id=%s forced=%s", run_id, force_run)
         client = PjnClient(
             os.environ.get("PJN_BASE_URL", "https://portalpjn.pjn.gov.ar/"),
             _required("PJN_USER"),
@@ -39,6 +41,7 @@ async def run_once() -> None:
         )
         results = await client.collect()
         storage.finish_run(run_id, results)
+        LOGGER.info("Consulta PJN completada run_id=%s resultados=%s", run_id, len(results))
         text = format_results(results)
     except Exception as exc:
         LOGGER.exception("Consulta PJN fallida, run_id=%s", run_id)
@@ -49,6 +52,7 @@ async def run_once() -> None:
 
     for chat_id in _allowed_chat_ids():
         await telegram.send_message(chat_id, text)
+    LOGGER.info("Notificación Telegram enviada run_id=%s destinatarios=%s", run_id, len(_allowed_chat_ids()))
 
 
 def main() -> None:

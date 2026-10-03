@@ -47,7 +47,7 @@ En Railway configura el servicio como Cron Job con:
 */30 12-18 * * *
 ```
 
-Railway usa UTC: esto cubre las 09:00 a 15:30 de Argentina. El script descarta la ejecución de las 15:30 y consulta sólo a las 09:00, 09:30, ..., 14:30 y 15:00.
+Railway usa UTC: esto cubre las 09:00 a 15:30 de Argentina. El script descarta la ejecución de las 15:30 y consulta sólo a las 09:00, 09:30, ..., 14:30 y 15:00. Para una prueba manual fuera de esa ventana, configura temporalmente `PJN_FORCE_RUN=true`; al terminar, elimínala o déjala en `false`. El horario del cron no cambia.
 
 Para consultas manuales por Telegram, el modo alternativo es ejecutar `python -m pjn_scw.bot` como servicio persistente; no debe ejecutarse junto con el cron si ambos usan el mismo bot.
 
