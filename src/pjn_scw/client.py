@@ -4,6 +4,7 @@ import json
 import logging
 import re
 from dataclasses import dataclass
+from urllib.parse import urlsplit, urlunsplit
 
 from playwright.async_api import BrowserContext, Page, TimeoutError as PlaywrightTimeoutError
 
@@ -108,12 +109,21 @@ class PjnClient:
             await page.locator(self.selectors["order_button"]).first.click()
             await page.wait_for_load_state("domcontentloaded")
         except PlaywrightTimeoutError:
-            select_info = await page.locator("select").evaluate_all(
-                "elements => elements.map(e => ({id: e.id, name: e.name, "
-                "options: Array.from(e.options).map(o => o.textContent.trim()).slice(0, 30)}))"
-            )
+            select_info = []
+            for frame in page.frames:
+                selects = await frame.locator("select").evaluate_all(
+                    "elements => elements.map(e => ({id: e.id, name: e.name, "
+                    "options: Array.from(e.options).map(o => o.textContent.trim()).slice(0, 30)}))"
+                )
+                summary = await frame.locator("h1, h2, h3, [role='alert'], button").evaluate_all(
+                    "elements => elements.map(e => e.innerText.trim()).filter(Boolean).slice(0, 20)"
+                )
+                frame_url = urlsplit(frame.url)
+                safe_url = urlunsplit((frame_url.scheme, frame_url.netloc, frame_url.path, "", ""))
+                select_info.append({"url": safe_url, "selects": selects, "summary": summary})
             LOGGER.error(
-                "No se pudo ordenar por fecha; selects disponibles=%s",
+                "No se pudo ordenar por fecha; page_title=%s frames=%s",
+                await page.title(),
                 json.dumps(select_info, ensure_ascii=False),
             )
             raise
