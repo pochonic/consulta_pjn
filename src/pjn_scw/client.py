@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import re
 from dataclasses import dataclass
@@ -102,9 +103,20 @@ class PjnClient:
             return page
 
     async def _order_by_date(self, page: Page) -> None:
-        await page.locator(self.selectors["order_select"]).first.select_option(label="FECHA")
-        await page.locator(self.selectors["order_button"]).first.click()
-        await page.wait_for_load_state("domcontentloaded")
+        try:
+            await page.locator(self.selectors["order_select"]).first.select_option(label="FECHA")
+            await page.locator(self.selectors["order_button"]).first.click()
+            await page.wait_for_load_state("domcontentloaded")
+        except PlaywrightTimeoutError:
+            select_info = await page.locator("select").evaluate_all(
+                "elements => elements.map(e => ({id: e.id, name: e.name, "
+                "options: Array.from(e.options).map(o => o.textContent.trim()).slice(0, 30)}))"
+            )
+            LOGGER.error(
+                "No se pudo ordenar por fecha; selects disponibles=%s",
+                json.dumps(select_info, ensure_ascii=False),
+            )
+            raise
 
     async def _extract_first_results(self, page: Page) -> list[PjnResult]:
         table = page.locator(self.selectors["result_table"]).filter(
