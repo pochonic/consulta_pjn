@@ -100,6 +100,14 @@ class PjnClient:
             await consultas.wait_for_load_state("domcontentloaded")
             return consultas
         except PlaywrightTimeoutError:
+            clicked_element = await link.evaluate(
+                "el => ({tag: el.tagName, text: el.innerText.trim(), href: el.href || null, "
+                "target: el.target || null, role: el.getAttribute('role')})"
+            )
+            LOGGER.warning(
+                "Consultas no abrió una pestaña nueva; elemento clickeado=%s",
+                json.dumps(clicked_element, ensure_ascii=False),
+            )
             await page.wait_for_load_state("domcontentloaded")
             return page
 
